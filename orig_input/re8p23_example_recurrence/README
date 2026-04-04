@@ -1,0 +1,26 @@
+
+bcftools query -l hprc_8p23_invertedRegion_t2t-chm13.rmHighMissingnessSamples.nomissing.vcf.gz > included_samples.id
+
+tail -n +2 hprc_8p23_inversionTable.tsv | python get_INVtsvFile.py chr8 7411171 11512654  > inversionTable.forPipeline.tsv
+
+
+bcftools stats -s - hprc_8p23_invertedRegion_t2t-chm13.vcf.gz > vcf.stats
+
+awk '$1=="PSC"' vcf.stats | awk '$14!=0 && $14!=268'|cut -f3 > highMissingness.sampleIDs 
+
+bcftools view -S ^highMissingness.sampleIDs hprc_8p23_invertedRegion_t2t-chm13.vcf.gz -Ov | bgzip -c > hprc_8p23_invertedRegion_t2t-chm13.rmHighMissingnessSamples.vcf.gz && tabix -p vcf hprc_8p23_invertedRegion_t2t-chm13.rmHighMissingnessSamples.vcf.gz
+
+bcftools +setGT hprc_8p23_invertedRegion_t2t-chm13.rmHighMissingnessSamples.vcf.gz -- -t q -i 'GT~"\."' -n . | bcftools +fill-tags -- -t F_MISSING | bcftools filter -e 'F_MISSING > 0.0' -Ov | bgzip -c > hprc_8p23_invertedRegion_t2t-chm13.rmHighMissingnessSamples.nomissing.vcf.gz && tabix -p vcf hprc_8p23_invertedRegion_t2t-chm13.rmHighMissingnessSamples.nomissing.vcf.gz
+
+
+echo -e "chr8-7411171-INV-4101483\tchr8-7411171-INV-4101483\tchr8\t7411171\t11512654\t4101483\n" > manifeat_8p23_invertedRegion_t2t-chm13.txt
+
+
+while read line;do echo ${line} | awk 'OFS="\t" {k=50000; count=0; x=$4; while(x<=$5) {print $1"_"count,$2,$3,x,x+k,k; x+=k; count+=1} print $1"_"count,$2,$3,x,$5,$5-(x-k)}';done  < manifeat_8p23_invertedRegion_t2t-chm13.txt > manifeat_8p23_invertedRegion_t2t-chm13.50kbWindows.txt 
+
+while read f;do y=`echo ${f} | awk '{print $3}'`; x=`echo ${f} | awk '{print $3":"$4"-"$5}'`; z=`tabix hprc_8p23_invertedRegion_t2t-chm13.rmHighMissingnessSamples.nomissing.vcf.gz ${x} | wc -l`; w=`echo ${f} | cut -f2`; echo -e "${w}\t${z}"; done < manifeat_8p23_invertedRegion_t2t-chm13.50kbWindows.txt | awk '$7>9' > manifeat_8p23_invertedRegion_t2t-chm13.50kbWindows.10SNVs.txt 
+
+python ~/bin/scripts/scripts_fromShavano/dadi_project/extract\ ancestral\ state/ancestralstate_chr_to_vcf.py  /net/eichler/vol28/projects/human_diversity/nobackups/hsiehph/genomicData/humanT2TCHM13v2_chimpClint/dir_clint_wX/ hprc_8p23_invertedRegion_t2t-chm13.rmHighMissingnessSamples.nomissing.vcf.gz std | bgzip -c > hprc_8p23_invertedRegion_t2t-chm13.rmHighMissingnessSamples.nomissing.wAA.vcf.gz && tabix -p vcf hprc_8p23_invertedRegion_t2t-chm13.rmHighMissingnessSamples.nomissing.wAA.vcf.gz
+
+
+

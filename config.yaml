@@ -1,0 +1,60 @@
+---
+
+# Inversion ID and coordinates
+manifest: orig_input/re8p23_example_recurrence/manifeat_8p23_invertedRegion_t2t-chm13.50kbWindows_1.10SNVs.txt
+
+# A BED file listing coordinates of all coding genes in the reference space
+refseq: orig_input/static/refSeq.T2TCHM13v2.wX.true_uniq.noLOC_orf_LINC_alt.bed
+
+# A file listing IDs for samples to be removed
+rmSample: orig_input/re8p23_example_recurrence/highMissingness.sampleIDs
+
+# A file listing the mapping between the original IDs (from the VCF; 1st column) and desired IDs (2nd column) 
+# This is for plotting
+mapping_ID2newID: orig_input/re8p23_example_recurrence/mapping_ID2newID.hprc2.txt
+
+# Samples to be kept; must follow the order listed in the input VCF.
+orderID_asVCF: orig_input/re8p23_example_recurrence/included_samples.id
+invExcludeSample: None
+
+# Effective population size
+Ne: 10000
+# Mutation rate per base per generation
+mu: 1.3e-8
+# Outgroup ID
+OutGroup: "CMP"
+
+# Parameters for inferences in local trees based on a sliding window approach
+# A large number, e.g., 1e9, effectively turn off 
+#
+# Length of sliding windows in base pair (e.g., 20 or 50 kbp)
+window_sliceFASTA: 1000000000
+# Length of sliding-window step size in base pair (e.g., 20 or 50 kbp)
+step_sliceFASTA: 1000000000 
+# minimal number of variable sites in each window (e.g., 10 variable sites)
+minVarSite_sliceFASTA: 10
+
+# Masked bases in the Python bytearray format
+# A pre-computed set for T2T-CHM13v2 is included in the repo
+MASK_Array: orig_input/static/bytearray_T2TCHM13v2_myMask98pc
+
+# Human and outgroup seqeunces extracted from alignment
+# This is for adding outgroup sequence to the analysis
+# A pre-computed set for T2T-CHM13v2 and pantro6 is made and available 
+# https://zenodo.org/uploads/19410918
+# The paths need to be adjusted if the files are placed differently
+HumanRef: orig_input/static/human_outgroupAlignment/dir_human_wX/
+Outgrp: orig_input/static/human_outgroupAlignment/dir_chimp_wX/
+
+# Number of bootstrap samples for tree building, e.g., 100 
+numBT: 0
+
+# VCF files list variants
+VCF:
+    chr8: orig_input/re8p23_example_recurrence/hprc_8p23_invertedRegion_t2t-chm13.rmHighMissingnessSamples.nomissing.wAA.vcf.gz
+
+# A file lists inversions in a format similar to the VCF
+INVtsv:
+    chr8: orig_input/re8p23_example_recurrence/inversionTable.forPipeline.tsv
+
+

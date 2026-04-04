@@ -1,0 +1,5 @@
+python2 /net/eichler/vol26/home/hsiehph/bin/scripts/scripts_uw/wholeGenome_MaCSsimulation/generateBytearray_HapMapGenMap_and_maskByBEDfile.py ../../refGenome_Sizefiles/T2TCHM13v2.chrom.3cols.bed ../maskFiles/T2TCHM13v2/T2T-CHM13v2.mask_cen_SD98.bed Bytearray_T2T-CHM13v2.mask_cen_SD98
+['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', 'X']
+The output cpickled bytearray files were made by:
+/net/eichler/vol26/home/hsiehph/bin/scripts/scripts_uw/wholeGenome_MaCSsimulation/generateBytearray_HapMapGenMap_and_maskByBEDfile.py ../../refGenome_Sizefiles/T2TCHM13v2.chrom.3cols.bed ../maskFiles/T2TCHM13v2/T2T-CHM13v2.mask_cen_SD98.bed Bytearray_T2T-CHM13v2.mask_cen_SD98
+('running time =', 48.126916)

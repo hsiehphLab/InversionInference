@@ -1,0 +1,502 @@
+import os, re
+import pandas as pd
+import numpy as np
+import glob
+
+
+shell.prefix("source config.sh; set -eo pipefail ; ")
+
+configfile: "config.yaml"
+
+if not os.path.exists("log"):
+	os.makedirs("log")
+
+
+MASK_Array = config["MASK_Array"]
+HumanRef = config["HumanRef"]
+Outgrp = config["Outgrp"]
+refseq = os.path.abspath(config["refseq"])
+rmSample = config["rmSample"]
+
+orderID_asVCF = config["orderID_asVCF"]
+mapping_ID2newID = config["mapping_ID2newID"]
+
+
+OutGroup = config["OutGroup"]
+
+window_sliceFASTA = config["window_sliceFASTA"]
+step_sliceFASTA = config["step_sliceFASTA"]
+minVarSite_sliceFASTA = config["minVarSite_sliceFASTA"]
+
+numBT = config["numBT"]
+
+dict_chrom_lociPrefix = {}
+dict_locus_INVID = {}
+manifest = config["manifest"]
+with open(config["manifest"]) as fin:
+	for line in fin:
+		tmp_line = line.strip().split()
+		locusID = tmp_line[0]
+		INVID = tmp_line[1]
+		dict_locus_INVID[locusID] = INVID
+		chromID = tmp_line[2][3:]
+		if chromID not in dict_chrom_lociPrefix:
+			dict_chrom_lociPrefix[chromID] = []
+		dict_chrom_lociPrefix[chromID].append(locusID)
+
+dict_locus_excludeSamples = {}
+if config["invExcludeSample"] != "None":
+	with open(config["invExcludeSample"]) as fin:
+		for line in fin:
+			if line.startswith("seqname"):
+				continue
+			line = line.strip().split()
+			dict_locus_excludeSamples[line[10]] = line[9]
+
+def _getINVtsv(wildcards):
+	return config["INVtsv"]["chr"+wildcards.CHROM]
+
+def _getVCF(wildcards):
+	return config["VCF"]["chr"+wildcards.CHROM]
+
+if not os.path.exists("log"):
+	os.makedirs("log")
+
+
+
+def aggregate_input1(wildcards):
+	# aggregate the file names of the random number of files generated at the scatter step
+	checkpoint_output = checkpoints.sliceVCFandFASTA.get(**wildcards).output[0]
+	return expand("output/chr{{CHROM}}/{{NAME}}/iqtree_sliceFASTA/{i}.timetree.nex",
+				i=glob_wildcards(os.path.join(checkpoint_output, '{i}.vcf.gz')).i)
+
+
+def aggregate_input2(wildcards):
+	# aggregate the file names of the random number of files generated at the scatter step
+	checkpoint_output = checkpoints.sliceVCFandFASTA.get(**wildcards).output[0]
+	return expand("output/chr{{CHROM}}/{{NAME}}/iqtree_sliceFASTA/{i}.minMutHomoplasy.data",
+				i=glob_wildcards(os.path.join(checkpoint_output, '{i}.vcf.gz')).i)
+
+
+def aggregate_input3(wildcards):
+	# aggregate the file names of the random number of files generated at the scatter step
+	checkpoint_output = checkpoints.sliceVCFandFASTA.get(**wildcards).output[0]
+	return expand("output/chr{{CHROM}}/{{NAME}}/sliceVCFandFASTA/{i}.fa",
+				i=glob_wildcards(os.path.join(checkpoint_output, '{i}.vcf.gz')).i)
+
+
+
+wildcard_constraints:
+    NAME="chr[a-zA-Z0-9]+-\d+-INV-\d+[_a-zA-Z0-9]+",
+    CHROM="[X0-9]+"
+
+
+
+def all_chroms_and_regions(wildcards):
+	rtn = []
+	pat1 = "output/chr{CHROM}/{NAME}/plot/{NAME}.treefile.pdf"
+	pat2 = "output/chr{CHROM}/{NAME}/plot/{NAME}.timetree.ape.pdf"
+	pat3 = "output/chr{CHROM}/{NAME}/plot/{NAME}.timetree.iqtree.pdf"
+	pat4 = "output/chr{CHROM}/{NAME}/plot/{NAME}.pairwiseIBS.pdf"
+	pat6 = "output/chr{CHROM}/{NAME}/plot/{NAME}.PC1vsPC2.pdf"
+#	pat7 = "output/chr{CHROM}/{NAME}/plot/{NAME}.densitree.pdf"
+#	pat8 = "output/chr{CHROM}/{NAME}/plot/{NAME}.TreeSimilarity.pdf"
+	pat9 = "output/chr{CHROM}/{NAME}/plot/{NAME}.densitree.sliceTrees.pdf"
+	pat10 = "output/chr{CHROM}/{NAME}/plot/{NAME}.TreeSimilarity.sliceTrees.pdf"
+	pat11 = "output/chr{CHROM}/{NAME}/plot/{NAME}.densitree.btTrees.pdf"
+	pat12 = "output/chr{CHROM}/{NAME}/plot/{NAME}.TreeSimilarity.btTrees.pdf"
+	pat13 = "output/chr{CHROM}/{NAME}/plot/{NAME}.cladogramMut.pdf"
+	pat14 = "output/chr{CHROM}/{NAME}/plot/{NAME}.polarizedHap.wCMP.pdf"
+	pat15 = "combinedPDF/chr{CHROM}/{NAME}.combined.pdf"
+	for CHROM in dict_chrom_lociPrefix.keys():
+		for locus in dict_chrom_lociPrefix[CHROM]:
+			rtn.append( pat1.format(CHROM=CHROM, NAME=locus) )
+			rtn.append( pat2.format(CHROM=CHROM, NAME=locus) )
+			rtn.append( pat3.format(CHROM=CHROM, NAME=locus) )
+			rtn.append( pat4.format(CHROM=CHROM, NAME=locus) )
+#			rtn.append( pat5.format(CHROM=CHROM, NAME=locus) )
+			rtn.append( pat6.format(CHROM=CHROM, NAME=locus) )
+#			rtn.append( pat7.format(CHROM=CHROM, NAME=locus) )
+#			rtn.append( pat8.format(CHROM=CHROM, NAME=locus) )
+			rtn.append( pat9.format(CHROM=CHROM, NAME=locus) )
+			rtn.append( pat10.format(CHROM=CHROM, NAME=locus) )
+			rtn.append( pat11.format(CHROM=CHROM, NAME=locus) )
+			rtn.append( pat12.format(CHROM=CHROM, NAME=locus) )
+			rtn.append( pat13.format(CHROM=CHROM, NAME=locus) )
+			rtn.append( pat14.format(CHROM=CHROM, NAME=locus) )
+			rtn.append( pat15.format(CHROM=CHROM, NAME=locus) )
+	return(rtn)
+
+
+rule dummy :
+	input : all_chroms_and_regions
+
+
+rule combinedPDF:
+	input : 
+		"output/chr{CHROM}/{NAME}/plot/{NAME}.PC1vsPC2.pdf",
+#		"output/chr{CHROM}/{NAME}/plot/{NAME}.elemDiff_pairHaps.pdf",
+		"output/chr{CHROM}/{NAME}/plot/{NAME}.pairwiseIBS.pdf",
+		"output/chr{CHROM}/{NAME}/plot/{NAME}.densitree.sliceTrees.pdf",
+		"output/chr{CHROM}/{NAME}/plot/{NAME}.TreeSimilarity.sliceTrees.pdf",
+		"output/chr{CHROM}/{NAME}/plot/{NAME}.densitree.btTrees.pdf",
+		"output/chr{CHROM}/{NAME}/plot/{NAME}.TreeSimilarity.btTrees.pdf",
+#		"output/chr{CHROM}/{NAME}/plot/{NAME}.densitree.pdf",
+#		"output/chr{CHROM}/{NAME}/plot/{NAME}.TreeSimilarity.pdf",
+		"output/chr{CHROM}/{NAME}/plot/{NAME}.cladogramMut.pdf",
+		"output/chr{CHROM}/{NAME}/plot/{NAME}.polarizedHap.wCMP.pdf",
+	output: "combinedPDF/chr{CHROM}/{NAME}.combined.pdf",
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=40G"
+	shell:
+			"""
+				gs -dBATCH -dNOPAUSE -dCompatibilityLevel=1.4 -dDetectDuplicateImages -dCompressFonts=true -r50 -q -sDEVICE=pdfwrite -dPDFSETTINGS=/default -sOutputFile={output}  {input} 
+			"""
+
+
+rule plotBtTrees:
+	input: 
+			tped = "output/chr{CHROM}/{NAME}/relate/{NAME}.filter.noMissing.haps",
+			tree = "output/chr{CHROM}/{NAME}/iqtree/{NAME}.timetree.nex",
+			homoplasy = "output/chr{CHROM}/{NAME}/iqtree_btFASTA/all.minMutHomoplasyBT.dat",
+			sample = "output/chr{CHROM}/{NAME}/data/sample.relate",
+			poplabels = "output/chr{CHROM}/{NAME}/data/poplabels.relate"
+	output: "output/chr{CHROM}/{NAME}/plot/{NAME}.densitree.btTrees.pdf",
+			"output/chr{CHROM}/{NAME}/plot/{NAME}.TreeSimilarity.btTrees.pdf",
+			"output/chr{CHROM}/{NAME}/plot/{NAME}.df.homoplasyBTtrees.dat",
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=40G"
+	run:
+		INVID = dict_locus_INVID[list({wildcards.NAME})[0]]
+		shell(
+			"""
+			cd  output/chr{wildcards.CHROM}/{wildcards.NAME}/plot ;
+			Rscript ../../../../scripts/plotBTtree.r  ../../../../{input.tped}  ../../../../{input.poplabels}  %s  ../iqtree_btFASTA  ../../../../{input.tree}  ../../../../{input.homoplasy}  {wildcards.NAME}
+
+			""" % INVID)
+
+
+
+rule merge_allMinMutHomoplasy_btFASTA:
+	input: "output/chr{CHROM}/{NAME}/iqtree/{NAME}.treefile", 
+			"output/chr{CHROM}/{NAME}/data/mapping_hap_INV.txt",
+			a=expand("output/chr{{CHROM}}/{{NAME}}/iqtree_btFASTA/bt.{btIDX}.minMutHomoplasy.data", btIDX=range(numBT)) 
+	output: "output/chr{CHROM}/{NAME}/iqtree_btFASTA/all.minMutHomoplasyBT.dat"
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=20G"
+	shell:
+			"""
+				cat {input.a} > {output} ;
+				python scripts/computeMinMutations.py {input[0]} {input[1]} {wildcards.NAME} >> {output}
+
+			"""
+
+
+rule minMutHomoplasy_btFASTA:
+	input: "output/chr{CHROM}/{NAME}/iqtree_btFASTA/bt.{btIDX}.treefile", 
+			"output/chr{CHROM}/{NAME}/data/mapping_hap_INV.txt"
+	output: temp("output/chr{CHROM}/{NAME}/iqtree_btFASTA/bt.{btIDX}.minMutHomoplasy.data"), 
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=20G"
+	shell:
+			"""
+				python scripts/computeMinMutations.py  {input[0]}  {input[1]} {wildcards.btIDX} > {output} 
+			"""
+
+
+
+rule IQTree_bootstrapAln:
+	input: "output/chr{CHROM}/{NAME}/btFASTA/bt.{btIDX}.fa",
+			"output/chr{CHROM}/{NAME}/iqtree_btFASTA/bt.{btIDX}.seed",
+			"output/chr{CHROM}/{NAME}/data/dateFile.txt",
+	output: "output/chr{CHROM}/{NAME}/iqtree_btFASTA/bt.{btIDX}.treefile", 
+			"output/chr{CHROM}/{NAME}/iqtree_btFASTA/bt.{btIDX}.timetree.nex",
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=20G"
+	wildcard_constraints:
+		i="\d+"
+	shell:
+			"""
+			cd output/chr{wildcards.CHROM}/{wildcards.NAME}/iqtree_btFASTA/ ;
+			iqtree  -safe -s ../../../../{input[0]} -keep-ident -redo -m MFPMERGE -pre bt.{wildcards.btIDX}  -o {OutGroup}  --date ../../../../{input[2]}  --date-options "-u 0"  --clock-sd 0.4 --date-tip 0 
+
+			"""
+
+
+rule bootstrapAln:
+	input:  aggregate_input3
+	output: temp("output/chr{CHROM}/{NAME}/btFASTA/bt.{btIDX}.fa"),
+			"output/chr{CHROM}/{NAME}/iqtree_btFASTA/bt.{btIDX}.seed"
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=20G"
+	shell:
+			"""
+				python scripts/bootstrapAlignment.py --numBT 1 --seed {wildcards.btIDX}  --outPrefix {wildcards.btIDX}  output/chr{wildcards.CHROM}/{wildcards.NAME}/sliceVCFandFASTA/  >  {output[0]}  2>  {output[1]}
+
+			"""
+
+
+rule plotSliceTrees:
+	input:
+			tped = "output/chr{CHROM}/{NAME}/relate/{NAME}.filter.noMissing.haps",
+			tree = "output/chr{CHROM}/{NAME}/iqtree/{NAME}.timetree.nex",
+			homoplasy = "output/chr{CHROM}/{NAME}/iqtree_sliceFASTA/all.minMutHomoplasy.dat",
+			sample = "output/chr{CHROM}/{NAME}/data/sample.relate",
+			poplabels = "output/chr{CHROM}/{NAME}/data/poplabels.relate",
+			bed = "output/chr{CHROM}/{NAME}/data/locus.bed",
+			a=aggregate_input1
+	output: "output/chr{CHROM}/{NAME}/plot/{NAME}.densitree.sliceTrees.pdf",
+			"output/chr{CHROM}/{NAME}/plot/{NAME}.TreeSimilarity.sliceTrees.pdf",
+			"output/chr{CHROM}/{NAME}/plot/{NAME}.df.homoplasySliceTrees.dat",
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=40G"
+	run:
+		INVID = dict_locus_INVID[list({wildcards.NAME})[0]]
+		shell(
+			"""
+			cd  output/chr{wildcards.CHROM}/{wildcards.NAME}/plot ;
+			Rscript ../../../../scripts/plotSliceTreeConcordnace.r  ../../../../{input.tped}  ../../../../{input.poplabels}  %s  ../iqtree_sliceFASTA  ../../../../{input.tree}  ../../../../{input.homoplasy}  {refseq}  {window_sliceFASTA}  {wildcards.NAME}  ../../../../{input.bed}
+			""" % INVID)
+
+
+rule merge_allMinMutHomoplasy:
+	input: "output/chr{CHROM}/{NAME}/iqtree/{NAME}.treefile", 
+			"output/chr{CHROM}/{NAME}/data/mapping_hap_INV.txt",
+			a=aggregate_input2
+	output: "output/chr{CHROM}/{NAME}/iqtree_sliceFASTA/all.minMutHomoplasy.dat"
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=20G"
+	run:
+		INVID = dict_locus_INVID[list({wildcards.NAME})[0]]
+		shell(
+			"""
+				cat {input.a} > {output}
+				python scripts/computeMinMutations.py {input[0]} {input[1]} %s >> {output} """ % INVID)
+
+
+rule minMutHomoplasy_sliceFASTA:
+	input: "output/chr{CHROM}/{NAME}/iqtree_sliceFASTA/{i}.treefile", 
+			"output/chr{CHROM}/{NAME}/data/mapping_hap_INV.txt"
+	output: temp("output/chr{CHROM}/{NAME}/iqtree_sliceFASTA/{i}.minMutHomoplasy.data"), 
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=20G"
+	shell:
+			"""
+				python scripts/computeMinMutations.py  {input[0]}  {input[1]} {wildcards.i}  > {output} 
+			"""
+
+
+rule IQTree_sliceFASTA:
+	input: "output/chr{CHROM}/{NAME}/sliceVCFandFASTA/{i}.fa",
+			"output/chr{CHROM}/{NAME}/data/dateFile.txt",
+			"output/chr{CHROM}/{NAME}/finished_sliceVCFandFASTA" 
+	output: "output/chr{CHROM}/{NAME}/iqtree_sliceFASTA/{i}.treefile", 
+			"output/chr{CHROM}/{NAME}/iqtree_sliceFASTA/{i}.timetree.nex",
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=20G "
+	wildcard_constraints:
+		i="\d+-\d+"
+	shell:
+			"""
+			cd output/chr{wildcards.CHROM}/{wildcards.NAME}/iqtree_sliceFASTA/ ;
+			iqtree  -safe -s ../../../../{input[0]} -redo -keep-ident -m MFPMERGE -pre {wildcards.i}  -o {OutGroup}  --date ../../../../{input[1]}  --date-options "-u 0"  --clock-sd 0.4 --date-tip 0 
+
+			"""
+
+
+checkpoint sliceVCFandFASTA:
+	input:  bed = "output/chr{CHROM}/{NAME}/data/locus.bed",
+			vcf = "output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.gz"
+	output: directory("output/chr{CHROM}/{NAME}/sliceVCFandFASTA/"),
+			"output/chr{CHROM}/{NAME}/finished_sliceVCFandFASTA" 
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=20G"
+	shell:
+			""" mkdir -p {output[0]}; touch {input.vcf}.tbi ; python scripts/phasedVCF_to_fasta_NotAddingGaps_NoSwappingChromForDEL_maskingDELhaplo.v5.py  {input.vcf}  --bedFile {input.bed}  --maskArray {MASK_Array}  --outgrp {Outgrp}  --humanRef {HumanRef} --window {window_sliceFASTA}  --step {step_sliceFASTA}  --minVarSite {minVarSite_sliceFASTA}  --outPrefix {output[0]}/ ; touch {output[1]} """ 
+
+
+
+
+
+rule convertVCF2Relate:
+	input: vcf = "output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.gz", 
+			bed = "output/chr{CHROM}/{NAME}/data/locus.bed"
+	output:
+		hap = "output/chr{CHROM}/{NAME}/relate/{NAME}.filter.noMissing.haps",
+		sample = "output/chr{CHROM}/{NAME}/relate/{NAME}.filter.noMissing.sample",
+	params:
+		sge_opts="-l mfree=20G -l h_rt=120:00:00"
+	shell:
+			"""
+			cd output/chr{wildcards.CHROM}/{wildcards.NAME}/relate/ ;
+			prefix=`basename {input.vcf} .vcf.gz` ; 
+			~/bin/relate_v1.1.7_x86_64_static/bin/RelateFileFormats --mode ConvertFromVcf --haps ${{prefix}}.haps --sample ${{prefix}}.sample -i ../data/{wildcards.NAME}.filter.noMissing ;
+
+			"""
+
+
+rule plotCladogramMut:
+	input: "output/chr{CHROM}/{NAME}/iqtree/{NAME}.treefile.wMut.nwk", 
+			"output/chr{CHROM}/{NAME}/data/mapping_hap_INV.txt",
+	output: "output/chr{CHROM}/{NAME}/plot/{NAME}.cladogramMut.pdf",
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=2G"
+	shell:
+			"""
+			Rscript scripts/plotTree.cladogramWmut.r  <(sed "s/'//g" {input[0]})  {input[1]}  output/chr{wildcards.CHROM}/{wildcards.NAME}/plot/{wildcards.NAME} 
+			"""
+
+
+rule getMut_NWK:
+	input: "output/chr{CHROM}/{NAME}/iqtree/{NAME}.treefile", 
+			"output/chr{CHROM}/{NAME}/data/mapping_hap_INV.txt",
+	output: "output/chr{CHROM}/{NAME}/iqtree/{NAME}.treefile.wMut.nwk", 
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=2G"
+	shell:
+			"""
+			python scripts/getMutState_tree.py  {input[0]}  {input[1]}  output/chr{wildcards.CHROM}/{wildcards.NAME}/iqtree/{wildcards.NAME}.treefile.wMut
+
+			"""
+
+rule plotHap_wCMP:
+	input: "output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.polarized.wCMP.hap.tped",
+			"output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.polarized.wCMP.hap.tfam",
+	output: "output/chr{CHROM}/{NAME}/plot/{NAME}.polarizedHap.wCMP.pdf",
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=2G"
+	shell:
+			"""
+			Rscript scripts/plotPolarizedHap.wCMP.r {input[0]} {input[1]} {wildcards.NAME} output/chr{wildcards.CHROM}/{wildcards.NAME}/plot/{wildcards.NAME} 
+			"""
+
+
+rule VCF2TPED3:
+	input:	"output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.gz",
+	output: "output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.polarized.wCMP.hap.tped",
+			"output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.polarized.wCMP.hap.tfam",
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=2G"
+	shell:
+			"""
+			zcat {input[0]} | python scripts/phasedVCF2tped.polarize.py - output/chr{wildcards.CHROM}/{wildcards.NAME}/data/{wildcards.NAME}.filter.noMissing.vcf.polarized.wCMP.hap None True
+
+			"""
+
+
+rule plotTree:
+	input: tree = "output/chr{CHROM}/{NAME}/iqtree/{NAME}.treefile",
+			timetree = "output/chr{CHROM}/{NAME}/iqtree/{NAME}.timetree.nex",
+			tped = "output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.hap.tped",
+			tfam = "output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.hap.tfam",
+			hapID = "output/chr{CHROM}/{NAME}/data/IDs_wPopID.hapID",
+	output: "output/chr{CHROM}/{NAME}/plot/{NAME}.treefile.pdf",
+			"output/chr{CHROM}/{NAME}/plot/{NAME}.timetree.iqtree.pdf",
+			"output/chr{CHROM}/{NAME}/plot/{NAME}.timetree.ape.pdf",
+			"output/chr{CHROM}/{NAME}/data/mapping_hap_INV.txt",
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=20G"
+	run:
+		INVID = dict_locus_INVID[list({wildcards.NAME})[0]]
+		shell(
+			"""
+			cd  output/chr{wildcards.CHROM}/{wildcards.NAME}/plot ;
+			Rscript ../../../../scripts/plotTree.r  ../../../../{input.tped}  ../../../../{input.tfam} ../../../../{input.hapID}  ../../../../{input.tree}  ../../../../{input.timetree}  %s  {wildcards.NAME}
+			""" % INVID)
+
+
+rule IQTree:
+	input: "output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.fasta",
+			"output/chr{CHROM}/{NAME}/data/dateFile.txt",
+	output: "output/chr{CHROM}/{NAME}/iqtree/{NAME}.treefile", 
+			"output/chr{CHROM}/{NAME}/iqtree/{NAME}.timetree.nex",
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=20G "
+	shell:
+			"""
+			cd output/chr{wildcards.CHROM}/{wildcards.NAME}/iqtree/ ;
+			iqtree  -safe -s ../../../../{input[0]} -keep-ident -bb 1000 -redo  -m MFPMERGE -pre {wildcards.NAME}  -o {OutGroup}  --date ../../../../{input[1]}  --date-options "-u 0"  --clock-sd 0.4 --date-tip 0  --date-ci 1000 
+
+			"""
+
+
+rule VCF2FASTA:
+	input: vcf = "output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.gz", 
+			bed = "output/chr{CHROM}/{NAME}/data/locus.bed"
+	output: "output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.fasta"
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=20G"
+	shell:
+			"""
+			python scripts/phasedVCF_to_fasta_NotAddingGaps_NoSwappingChromForDEL_maskingDELhaplo.v4.py  {input.vcf}  {input.bed}  {output}  --maskArray {MASK_Array}  --outgrp {Outgrp}  --humanRef {HumanRef} 
+
+			"""
+
+
+rule plotIBS1:
+	input: "output/chr{CHROM}/{NAME}/data/{NAME}.IBS.dat",
+			"output/chr{CHROM}/{NAME}/data/{NAME}.elemDiff_pairHaps.dat"
+	output: "output/chr{CHROM}/{NAME}/plot/{NAME}.pairwiseIBS.pdf",
+#			"output/chr{CHROM}/{NAME}/plot/{NAME}.elemDiff_pairHaps.pdf"
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=20G"
+	shell:
+			"""
+			Rscript scripts/plot_IBS.r  {input[0]}  {input[1]}  {output[0]}  ""
+			
+			"""
+
+
+rule computeIBS1:
+	input: "output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.hap.tped", 
+			"output/chr{CHROM}/{NAME}/data/IDs_wPopID.hapID"
+	output: "output/chr{CHROM}/{NAME}/data/{NAME}.IBS.dat",
+			"output/chr{CHROM}/{NAME}/data/{NAME}.elemDiff_pairHaps.dat",
+			
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=20G"
+	shell:
+			"""
+			python scripts/pairwiseIBS.py  {input[0]}  {input[1]}  {wildcards.NAME}  {output[0]} >  {output[1]}
+
+			"""
+
+
+rule plotPCA:
+	input: "output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.hap.tped", 
+			"output/chr{CHROM}/{NAME}/data/IDs_wPopID.hapID",
+			"output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.hap.tfam", 
+	output: "output/chr{CHROM}/{NAME}/plot/{NAME}.PC1vsPC2.pdf",
+			"output/chr{CHROM}/{NAME}/data/sample.relate",
+			"output/chr{CHROM}/{NAME}/data/poplabels.relate",
+			"output/chr{CHROM}/{NAME}/data/dateFile.txt",
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=20G"
+	run:
+		INVID = dict_locus_INVID[list({wildcards.NAME})[0]]
+		shell(
+			"""
+			cd output/chr{wildcards.CHROM}/{wildcards.NAME}/plot/ ;
+			Rscript ../../../../scripts/haplotypePCA.r  ../../../../{input[0]}  ../../../../{input[1]}  %s  ../../../../{input[2]} {wildcards.NAME}
+			""" % INVID)
+
+
+
+rule VCF2TPED1:
+	input:	"output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.gz",
+	output: "output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.hap.tped",
+			"output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.hap.tfam",
+			"output/chr{CHROM}/{NAME}/data/IDs_wPopID.hapID",
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=20G"
+	shell:
+			"""
+			cd output/chr{wildcards.CHROM}/{wildcards.NAME}/data ;
+			zcat ../../../../{input[0]} | python ../../../../scripts/phasedVCF2tped.py - {wildcards.NAME}.filter.noMissing.vcf.hap ;
+			cut -d' ' -f1 ../../../../{output[1]} | awk 'BEGIN{{FS=\"_\";OFS=\"\\t\"}} {{print $0,$1}}' > IDs_wPopID.txt ;
+			awk '{{print $1\"_hap1\\t\"$2"\\n\"$1\"_hap2\\t\"$2}}' IDs_wPopID.txt  > IDs_wPopID.hapID
+
+			"""
+
+
+
+rule subsetVCF1:
+	input: vcf = _getVCF , INVtsv = _getINVtsv
+	output: bed = "output/chr{CHROM}/{NAME}/data/locus.bed" , 
+			vcf0 = "output/chr{CHROM}/{NAME}/data/{NAME}.filter.noINV.vcf.gz",
+			vcf1 = "output/chr{CHROM}/{NAME}/data/{NAME}.filter.INV.vcf.gz",
+			vcf2 = "output/chr{CHROM}/{NAME}/data/{NAME}.filter.noMissing.vcf.gz"
+	params: sge_opts="-l h_rt=72:00:00 -l mfree=6G"
+	run:
+		if list({wildcards.NAME})[0] in dict_locus_excludeSamples:
+			rmSamples = dict_locus_excludeSamples[list({wildcards.NAME})[0]]
+		else:
+			rmSamples = ""
+
+		shell(""" grep -P "{wildcards.NAME}\s" {manifest} | awk 'OFS=\"\\t\" {{print $3, $4, $5}}' > {output.bed} ;
+			x=`grep -P "{wildcards.NAME}\s" {manifest} | awk '{{print $3\":\"$4\"-\"$5}}'`;
+			bcftools view -r ${{x}} -q 0.0000001 {input.vcf} | python ~/bin/scripts/scripts_uw/VCF_related/reorderSample_VCF.py3 --IDfile  {orderID_asVCF}  stdin | bgzip -c > {output.vcf0} &&	tabix -p vcf {output.vcf0};
+			
+			python scripts/INVgenotypeTSV2VCF.py  {wildcards.NAME}  {manifest}  {input.INVtsv}  {HumanRef}  {Outgrp}  {MASK_Array}  2>> exclude.variant.txt |  python ~/bin/scripts/scripts_uw/VCF_related/reorderSample_VCF.py3 --IDfile  {orderID_asVCF}  stdin | bgzip -c > {output.vcf1}; tabix -p vcf {output.vcf1};
+
+			bcftools concat {output.vcf0} {output.vcf1} | bcftools sort | python ~/bin/scripts/scripts_uw/VCF_related/unphased2phased_inVCF.py stdin | bcftools reheader -s {mapping_ID2newID} | python scripts/rmSample_ifINVmissing.py - {wildcards.NAME} | bcftools view --force-sample -s ^{rmSamples} - | bgzip -c > {output.vcf2} ; tabix -p vcf {output.vcf2}
+
+			""")

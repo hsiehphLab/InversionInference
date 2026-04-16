@@ -493,9 +493,9 @@ rule subsetVCF1:
 
 		shell(""" grep -P "{wildcards.NAME}\s" {manifest} | awk 'OFS=\"\\t\" {{print $3, $4, $5}}' > {output.bed} ;
 			x=`grep -P "{wildcards.NAME}\s" {manifest} | awk '{{print $3\":\"$4\"-\"$5}}'`;
-			bcftools view -r ${{x}} -q 0.0000001 {input.vcf} | python ~/bin/scripts/scripts_uw/VCF_related/reorderSample_VCF.py3 --IDfile  {orderID_asVCF}  stdin | bgzip -c > {output.vcf0} &&	tabix -p vcf {output.vcf0};
+			bcftools view -r ${{x}} -q 0.0000001 {input.vcf} | python scripts/reorderSample_VCF.py3 --IDfile  {orderID_asVCF}  stdin | bgzip -c > {output.vcf0} &&	tabix -p vcf {output.vcf0};
 			
-			python scripts/INVgenotypeTSV2VCF.py  {wildcards.NAME}  {manifest}  {input.INVtsv}  {HumanRef}  {Outgrp}  {MASK_Array}  2>> exclude.variant.txt |  python ~/bin/scripts/scripts_uw/VCF_related/reorderSample_VCF.py3 --IDfile  {orderID_asVCF}  stdin | bgzip -c > {output.vcf1}; tabix -p vcf {output.vcf1};
+			python scripts/INVgenotypeTSV2VCF.py  {wildcards.NAME}  {manifest}  {input.INVtsv}  {HumanRef}  {Outgrp}  {MASK_Array}  2>> exclude.variant.txt |  python scripts/reorderSample_VCF.py3 --IDfile  {orderID_asVCF}  stdin | bgzip -c > {output.vcf1}; tabix -p vcf {output.vcf1};
 
 			bcftools concat {output.vcf0} {output.vcf1} | bcftools sort | python ~/bin/scripts/scripts_uw/VCF_related/unphased2phased_inVCF.py stdin | bcftools reheader -s {mapping_ID2newID} | python scripts/rmSample_ifINVmissing.py - {wildcards.NAME} | bcftools view --force-sample -s ^{rmSamples} - | bgzip -c > {output.vcf2} ; tabix -p vcf {output.vcf2}
 
